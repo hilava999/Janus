@@ -1,0 +1,325 @@
+---
+import { getCollection, getEntry } from 'astro:content';
+import { Image } from 'astro:assets';
+import { Icon } from "astro-icon/components";
+
+import Sns from '../components/Sns.astro';
+import Modal from '../components/Modal.astro';
+import SeoHead from '../components/SeoHead.astro';
+
+import '../css/reset.css';
+import '../css/base.css';
+
+// 1. サイト設定 (settings) を取得（タイトルやテーマカラー用）
+const settingsEntry = await getEntry('settings', 'index');
+const settings = settingsEntry?.data;
+
+const accentColor = settings?.theme?.accent_color || '#4a90e2';
+const fontFamily = settings?.theme?.font === 'serif' 
+  ? "'Shippori Mincho', serif"
+  : "'Noto Sans JP', sans-serif";
+
+// 2. works コレクションを取得して最新順（降順）にソート
+const allWorks = await getCollection('work');
+
+// 3. 画像の動的インポート準備 (Astro <Image /> 用)
+const imageGlob = import.meta.glob<{ default: ImageMetadata }>('/src/assets/images/**/*.{jpeg,jpg,png,gif,webp}');
+
+const getMetadata = (path: string) => {
+  if (!path) return null;
+  const formattedPath = path.startsWith('@/') 
+    ? path.replace('@/', '/src/') 
+    : path.startsWith('src/') 
+    ? '/' + path 
+    : path;
+  
+  return imageGlob[formattedPath] ? imageGlob[formattedPath]() : null;
+};
+
+// 4. 全作品からタグと件数を集計する
+const tagCounts = allWorks.reduce((acc, work) => {
+  const tags = work.data.tags || [];
+  tags.forEach((tag) => {
+    acc[tag] = (acc[tag] || 0) + 1;
+  });
+  return acc;
+}, {} as Record<string, number>);
+
+// タグ一覧の配列を作成
+const allTags = Object.entries(tagCounts).map(([name, count]) => ({
+  name,
+  count,
+}));
+
+// --- 変更部分：表示上限の設定 ---
+const INITIAL_LIMIT = 20; // 最初ペーストで表示する件数
+
+// 最新順にソート
+const sortedWorks = allWorks.sort(
+  (a, b) => new Date(b.data.pubDate).getTime() - new Date(a.data.pubDate).getTime()
+);
+
+const pageTitle = `  ${settings?.siteTitle || 'イラストサイト'}`;
+const pageDesc = settings?.desc || 'サイトの説明文';
+
+// スライド画像パスの調整用ヘルパー関数
+const getImageUrl = (path: string) => {
+  if (!path) return '';
+  if (path.startsWith('http') || path.startsWith('/')) {
+    return path;
+  }
+  return '/' + path.replace(/^\/+/, '');
+};
+
+// スライド画像
+const topSlides = settings?.top_slides || [];
+---
+<!doctype html>
+<html lang="ja">
+	<head>
+		<link rel="icon" type="image/svg+xml" href={settings?.favicon || '/favicon.svg'} />
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+		<meta name="generator" content={Astro.generator} />
+		<SeoHead title={pageTitle} description={pageDesc} />
+	</head>
+	<body style={`--accent: ${accentColor}; font-family: ${fontFamily};`}>
+		<div class="wrapper">
+			<div class="header">
+				<div class="hero-header">
+					<div class="swiper main-swiper">
+						<div class="swiper-wrapper">
+							{topSlides.map((slide) => {
+								const imageUrl = getImageUrl(slide);
+								return (
+									<div class="swiper-slide">
+										<img src={imageUrl} alt="Top Slide" class="slide-img" />
+									</div>
+								);
+							})}
+						</div>
+					</div>
+					<div class="top-title">
+						<h1 class="site-title">{settings?.siteTitle || 'イラストサイト'}</h1>
+						<h3 class="sub-title">{settings?.subTitle}</h3>
+						<p>LastUpdate：{settings?.lastUpdate}</p>
+					</div>
+				</div>
+			</div>
+			<div class="main">
+				<div class="main-container">
+					<div class="prof-container">
+						<div class="prof-content">
+							<div class="icon"><img src={settings?.prof.icon} alt="アイコン"></div>
+							<h3 class="author">{settings?.prof.author}</h3>
+							<p class="bio">{settings?.prof.bio}</p>
+							<Sns />
+							<Modal>
+								<!-- 👇 ボタンの中身（アイコン＋テキスト） -->
+								<Fragment slot="button">
+									<Icon name="material-symbols:info-rounded" class="btn-icon"/> <!-- ここにAstroのアイコン -->
+								</Fragment>
+
+								<!-- 👇 ダイアログの中身（デフォルトスロット） -->
+								<div class="modal-body">
+									<h2>About This Site</h2>
+									<p>{settings?.about}</p>
+								</div>
+							</Modal>
+						</div>
+						<!-- タグフィルターリスト -->
+						{allTags.length > 0 && (
+							<div class="tag-container">
+							<ul class="tag-list">
+								{/* 全件表示ボタン */}
+								<li class="tag-item">
+								<a href="#" class="tag-chip active" data-tag="">
+									All ({allWorks.length})
+								</a>
+								</li>
+
+								{/* 各タグのリスト */}
+								{allTags.map((tag) => (
+								<li class="tag-item">
+									<a href="#" class="tag-chip" data-tag={tag.name}>
+										{tag.name} ({tag.count})
+									</a>
+								</li>
+								))}
+							</ul>
+							</div>
+						)}
+					</div>
+				<div class="works-container">
+					<div class="masonry">
+						{sortedWorks.map((work, index) => {
+						const firstImgPath = work.data.imgs?.[0] || '';
+						const thumbnailMeta = getMetadata(firstImgPath);
+						// 初期表示数より後ろのものは最初から非表示クラスをつけておく
+						const isHidden = index >= INITIAL_LIMIT;
+
+						return (
+						<article 
+							class={`work-card ${isHidden ? 'is-hidden' : ''}`} 
+							data-tags={JSON.stringify(work.data.tags || [])}
+							style={isHidden ? 'display: none;' : ''}
+						>
+							<a href={`/work/${work.id}`} class="work-link">
+							<div class={`thumbnail-wrapper ${work.data.nsfw ? 'is-nsfw' : ''}`}>
+								{work.data.nsfw && <span class="badge-nsfw">NSFW</span>}
+
+								{thumbnailMeta ? (
+									<Image src={thumbnailMeta} alt={work.data.title} class="work-thumb" />
+								) : firstImgPath ? (
+									<img src={firstImgPath} alt={work.data.title} class="work-thumb" />
+								) : (
+									<div class="no-image">No Image</div>
+								)}
+								</div>
+							</a>
+							{work.data.imgs.length >= 2 && (
+								<span class="img-badge">{work.data.imgs.length}</span>
+							)}
+						</article>
+						);
+					})}
+					</div>
+					{sortedWorks.length > INITIAL_LIMIT && (
+					<div class="load-more-container" style="text-align: center; margin: 40px 0;">
+						<button id="load-more-btn" class="load-more-btn">More</button>
+					</div>
+					)}
+					</div>
+				</div>
+			</div>
+			<div class="footer">
+				<p>&copy; {new Date().getFullYear()} {settings?.prof?.author || settings?.siteTitle}.</p>
+			</div>
+		</div>
+
+		{/* Swiper & MiniMasonry のスクリプトまとめ */}
+		<!-- index.astro の下部にある <script> 部分 -->
+		{/* Swiper & MiniMasonry のスクリプトまとめ */}
+		<script>
+			import Swiper from 'swiper';
+			import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
+			import MiniMasonry from 'minimasonry';
+
+			document.addEventListener('DOMContentLoaded', () => {
+				// 1. Swiper の初期化
+				new Swiper('.main-swiper', {
+					modules: [Navigation, Pagination, Autoplay, EffectFade],
+					effect: 'fade',
+					fadeEffect: { crossFade: true },
+					loop: true,
+					autoplay: {
+						delay: 4000,
+						disableOnInteraction: false,
+					},
+				});
+
+				// 2. MiniMasonry の初期化 & スマホ時のリセット処理
+				let masonry: any = null;
+
+				function handleResize() {
+					const cards = document.querySelectorAll('.work-card');
+					
+					if (window.innerWidth > 650) {
+						cards.forEach(card => {
+							(card as HTMLElement).style.position = '';
+							(card as HTMLElement).style.transform = '';
+							(card as HTMLElement).style.width = '300px';
+						});
+
+						if (!masonry) {
+							masonry = new MiniMasonry({
+								container: '.masonry', 
+								baseWidth: 300,
+								gutter: 20,
+								surroundingGutter: true,
+								minify: true, 
+							});
+						} else {
+							masonry.layout();
+						}
+					} else {
+						if (masonry) {
+							window.removeEventListener('resize', masonry.resizeThrottled);
+							masonry = null;
+						}
+						cards.forEach(card => {
+							(card as HTMLElement).style.position = 'static';
+							(card as HTMLElement).style.transform = 'none';
+							(card as HTMLElement).style.width = '';
+						});
+						const container = document.querySelector('.masonry');
+						if (container) (container as HTMLElement).style.height = 'auto';
+					}
+				}
+
+				handleResize();
+				window.addEventListener('resize', handleResize);
+
+				// 3. タグフィルターの動作処理
+				const tagChips = document.querySelectorAll('.tag-chip');
+				const workCards = document.querySelectorAll('.work-card');
+
+				tagChips.forEach(chip => {
+					chip.addEventListener('click', (e) => {
+						e.preventDefault();
+						const selectedTag = chip.getAttribute('data-tag');
+
+						tagChips.forEach(c => c.classList.remove('active'));
+						chip.classList.add('active');
+
+						workCards.forEach(card => {
+							const tags = JSON.parse(card.getAttribute('data-tags') || '[]');
+							if (selectedTag === "" || tags.includes(selectedTag)) {
+								(card as HTMLElement).style.display = '';
+							} else {
+								(card as HTMLElement).style.display = 'none';
+							}
+						});
+
+						if (window.innerWidth > 650 && masonry) {
+							masonry.layout();
+						}
+					});
+				});
+
+				// 4. 「もっと見る」ボタンの動作処理（※スコープ内に移動しました！）
+				const loadMoreBtn = document.getElementById('load-more-btn');
+				const STEP = 12; // 一度に追加する件数
+
+				if (loadMoreBtn) {
+					loadMoreBtn.addEventListener('click', () => {
+						const hiddenCards = document.querySelectorAll('.work-card.is-hidden');
+						let shown = 0;
+
+						hiddenCards.forEach(card => {
+							if (shown < STEP) {
+								card.classList.remove('is-hidden');
+								(card as HTMLElement).style.display = '';
+								shown++;
+							}
+						});
+
+						if (document.querySelectorAll('.work-card.is-hidden').length === 0) {
+							loadMoreBtn.style.display = 'none';
+						}
+
+						if (window.innerWidth > 650 && masonry) {
+							masonry.layout();
+						}
+					});
+				}
+			});
+		</script>
+
+		<style>
+			[data-icon] {
+				color: #444;
+				font-size: 1.7rem;
+			}
+		</style>
+	</body>
+</html>

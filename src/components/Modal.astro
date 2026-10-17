@@ -1,0 +1,90 @@
+---
+// buttonText プロパティは不要になるので削除またはフォールバック用にします
+---
+
+<div class="modal-wrapper">
+  <!-- 1. トリガーとなるボタン -->
+  <button type="button" class="open-modal-btn">
+    <!-- 👇 ここに名前付きスロットを配置。何も渡されない場合のデフォルトテキストも設定可能 -->
+    <slot name="button">ダイアログを開く</slot>
+  </button>
+
+  <!-- 2. ダイアログ本体 -->
+  <dialog class="custom-dialog">
+    <div class="dialog-content">
+      <!-- 👇 ここはダイアログの中身（デフォルトスロット） -->
+      <slot /> 
+      
+      <!-- 3. 閉じるボタン -->
+      <button type="button" class="close-modal-btn">閉じる</button>
+    </div>
+  </dialog>
+</div>
+
+<style>
+    .modal-wrapper {
+        display: flex;
+        justify-content: flex-end; /* 👈 中のボタンを一番右に寄せる */
+        width: 100%;               /* 👈 横幅いっぱいに広げる */
+    }
+  /* ボタンの中でアイコンと文字を綺麗に中央揃え・横並びにするためのCSS */
+.open-modal-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  border: none;
+  background-color: transparent;
+  padding: 0 20px; /* クリックしやすいように少し余白を持たせる */
+}
+
+  .open-modal-btn:hover {
+    opacity: 0.5;
+  }
+
+  /* --- 以下、ダイアログのスタイルやスクリプトは前のままでOKです --- */
+  .custom-dialog {
+    border: none;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    margin: auto; 
+  }
+  .custom-dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+  }
+  .dialog-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .close-modal-btn {
+    align-self: flex-end;
+    padding: 6px 12px;
+    background-color: #eee;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+</style>
+
+<script>
+  const wrappers = document.querySelectorAll('.modal-wrapper');
+  wrappers.forEach((wrapper) => {
+    const openBtn = wrapper.querySelector('.open-modal-btn');
+    const closeBtn = wrapper.querySelector('.close-modal-btn');
+    const dialog = wrapper.querySelector('.custom-dialog') as HTMLDialogElement;
+
+    if (openBtn && dialog && closeBtn) {
+      openBtn.addEventListener('click', () => dialog.showModal());
+      closeBtn.addEventListener('click', () => dialog.close());
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) dialog.close();
+      });
+    }
+  });
+</script>

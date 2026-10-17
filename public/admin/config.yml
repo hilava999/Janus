@@ -1,0 +1,90 @@
+backend:
+  name: github
+  repo: ""
+  branch: main
+  base_url: https://sveltia-cms-auth.migomasu356.workers.dev
+
+media_folder: "src/assets/images"
+public_folder: "/src/assets/images"
+
+app_title: "Janus CMS"
+
+media_libraries:
+  cloudflare_r2:
+    account_id: 
+    bucket: 
+    access_key_id: 
+    secret_access_key: 
+    public_url: 
+
+
+collections:
+  - name: "work"
+    label: "イラスト作品"
+    folder: "src/content/work"
+    create: true
+    slug: "{{slug}}"
+    fields:
+      - { label: "タイトル", name: "title", widget: "string" }
+      - { label: "公開日", name: "pubDate", widget: "datetime", format: "YYYY-MM-DD", date_format: "YYYY-MM-DD", time_format: false }
+      - { label: "NSFW (R-18)", name: "nsfw", widget: "boolean", default: false }
+      - label: "イラスト画像"
+        name: "imgs"
+        widget: "list"
+        field: { label: "画像", name: "image", widget: "image" }
+      - label: "タグ"
+        name: "tags"
+        widget: "list"
+        required: false
+      - { label: "作品名・元ネタ (Fandom)", name: "fandom", widget: "string", required: false }
+      - { label: "キャプション・本文", name: "body", widget: "markdown", required: false }
+
+singletons:
+  - name: "Settings"
+    label: "サイトの設定"
+    file: "src/content/settings/index.json"
+    media_folder: "public/images"  # Settings全体での保存先
+    public_folder: "/images"
+    fields:
+      - { label: "サイトタイトル", name: "siteTitle", widget: "string" }
+      - { label: "サブタイトル", name: "subTitle", widget: "string", required: false }
+      - { label: "サイト説明文 (Desc)", name: "desc", widget: "text", required: false }
+      - { label: "サイト説明文 (About)", name: "about", widget: "text", required: false }
+      - { label: "ファビコン", name: "favicon", widget: "image", required: false }
+      - { label: "最終更新日", name: "lastUpdate", widget: "datetime", format: "YYYY-MM-DD", date_format: "YYYY-MM-DD", time_format: false, required: false }
+      - { label: "OGP画像", name: "ogImage", widget: "image", required: false }
+      - label: "トップスライド画像"
+        name: "top_slides"
+        widget: "list"
+        field: { label: "画像パス/URL", name: "item", widget: "image" }
+        required: false
+        media_folder: "public/images/slides"
+        public_folder: "/images/slides"
+      - label: "プロフィール設定 (prof)"
+        name: "prof"
+        widget: "object"
+        fields:
+          - { label: "作者名", name: "author", widget: "string" }
+          - { label: "自己紹介文", name: "bio", widget: "text", required: false }
+          - { label: "アイコン", name: "icon", widget: "image", required: false }
+      - label: "SNSリンク一覧"
+        name: "sns"
+        widget: "list"
+        required: false
+        fields:
+          - label: "プラットフォーム"
+            name: "platform"
+            widget: "select"
+            options:
+              - { label: "X (Twitter)", value: "x" }
+              - { label: "Bluesky", value: "bluesky" }
+              - { label: "Pixiv", value: "pixiv" }
+              - { label: "GitHub", value: "github" }
+              - { label: "YouTube", value: "youtube" }
+          - { label: "URL", name: "url", widget: "string" }
+      - label: "テーマデザイン"
+        name: "theme"
+        widget: "object"
+        fields:
+          - { label: "アクセントカラー", name: "accent_color", widget: "color" }
+          - { label: "フォント選択", name: "font", widget: "select", options: ["sans", "serif"] }

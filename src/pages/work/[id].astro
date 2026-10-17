@@ -1,0 +1,321 @@
+---
+export const prerender = true; // ← この1行を追加
+import { getCollection, getEntry, render } from 'astro:content';
+import { Image } from 'astro:assets';
+
+import Photo from '../../components/PhotoSwipeScript.astro';
+import SeoHead from '../../components/SeoHead.astro';
+
+import '../../css/reset.css';
+import '../../css/base.css';
+
+// 1. 全作品の動的パスを作成
+export async function getStaticPaths() {
+  const works = await getCollection('work');
+  return works.map((entry) => ({
+    params: { id: entry.id },
+    props: { entry },
+  }));
+}
+
+// 2. Props または params から entry を安全に取得
+const { id } = Astro.params;
+const entry = Astro.props.entry || (id ? await getEntry('work', id) : null);
+
+// entry が存在しない場合は 404 ページへ
+if (!entry) {
+  return Astro.redirect('/404');
+}
+
+const work = entry.data;
+
+// 3. サイト設定 (settings) を取得
+const settingsEntry = await getEntry('settings', 'index'); // または 'profile'
+const settings = settingsEntry?.data;
+
+const accentColor = settings?.theme?.accent_color || '#4a90e2';
+const fontFamily = settings?.theme?.font === 'serif' 
+  ? "'Shippori Mincho', serif"
+  : "'Noto Sans JP', sans-serif";
+
+// 4. 画像の動的インポート準備 (Astro <Image /> 用)
+const imageGlob = import.meta.glob<{ default: ImageMetadata }>('/src/assets/images/**/*.{jpeg,jpg,png,gif,webp}');
+
+const getMetadata = async (path: string) => {
+  if (!path) return null;
+  const formattedPath = path.startsWith('@/') 
+    ? path.replace('@/', '/src/') 
+    : path.startsWith('src/') 
+    ? '/' + path 
+    : path;
+  
+  if (imageGlob[formattedPath]) {
+    const mod = await imageGlob[formattedPath]();
+    return mod.default; // { src, width, height, format } が入ったオブジェクトを取得
+  }
+  return null;
+};
+
+// 5. 本文（Markdoc / キャプション）のレンダリング
+const { Content } = await render(entry);
+
+
+const pageTitle = `${work.title} | ${settings?.siteTitle || 'イラストサイト'}`;
+const pageDesc = settings?.desc || `${work.title}のイラスト作品ページです。`;
+
+// 作品の1枚目の画像をOGP画像に指定
+const ogpImage = work.imgs?.[0] || '/ogImage.png';
+---
+
+<html lang="ja">
+  <head>
+    <SeoHead title={pageTitle} description={pageDesc} image={ogpImage} type="article"/>
+    <link rel="icon" type="image/svg+xml" href={settings?.favicon || '/favicon.svg'} />
+  </head>
+
+  <body style={`--accent: ${accentColor}; font-family: ${fontFamily};`}>
+    <div class="wrapper">
+      <header class="header">
+        <a href="/"><h1 class="page-top">{settings?.siteTitle || 'サイト名'}</h1></a>
+      </header>
+
+      <main class="post-main">
+        <article class="work-detail">
+          {/* タイトル & 投稿日 */}
+          <div class="work-header">
+            <h1 class="title">{work.title}</h1>
+            <p class="date">
+              <time datetime={new Date(work.pubDate).toISOString()}>
+                {new Date(work.pubDate).toLocaleDateString('ja-JP')}
+              </time>
+            </p>
+          </div>
+
+          {/* センシティブ作品（NSFW）の場合の警告表示エリア */}
+          {work.nsfw ? (
+            <details class="nsfw-wrapper">
+              <summary class="nsfw-warning">
+                ⚠️ この作品にはR-18 / センシティブな表現が含まれています（クリックで表示）
+              </summary>
+              <div class="image-gallery" id="my-gallery">
+                {work.imgs.map(async (imgPath, index) => {
+                  const imgMeta = await getMetadata(imgPath);
+                  return (
+                    <div class="image-item">
+                      {imgMeta ? (
+                        <a
+                          href={imgMeta.src}
+                          data-pswp-width={imgMeta.width}
+                          data-pswp-height={imgMeta.height}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Image 
+                            src={imgMeta} 
+                            alt={`${work.title} - ${index + 1}`} 
+                            class="detail-img" 
+                          />
+                        </a>
+                      ) : (
+                        <img src={imgPath} alt={`${work.title} - ${index + 1}`} class="detail-img" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          ) : (
+            /* 通常作品のギャラリー表示部分 */
+            <div class="image-gallery" id="my-gallery">
+              {work.imgs.map(async (imgPath, index) => {
+                const imgMeta = await getMetadata(imgPath);
+                return (
+                  <div class="image-item">
+                    {imgMeta ? (
+                      <a
+                        href={imgMeta.src}
+                        data-pswp-width={imgMeta.width}
+                        data-pswp-height={imgMeta.height}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Image 
+                          src={imgMeta} 
+                          alt={`${work.title} - ${index + 1}`} 
+                          class="detail-img" 
+                        />
+                      </a>
+                    ) : (
+                      <img src={imgPath} alt={`${work.title} - ${index + 1}`} class="detail-img" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* メタ情報（区分・二次創作作品名・タグ） */}
+          <div class="work-meta">
+            {work.fandom && (
+              <p class="fandom">
+                <span class="label">ジャンル・作品：</span>{work.fandom}
+              </p>
+            )}
+
+            {work.tags && work.tags.length > 0 && (
+              <ul class="tag-list">
+                {work.tags.map((tag) => (
+                  <li class="tag-chip">
+                      #{tag}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* キャプション・説明文 */}
+          <div class="work-content">
+            <Content />
+          </div>
+
+          {/* 戻るボタン */}
+          <div class="back-container">
+            <a href="/" class="btn-back">Back</a>
+          </div>
+        </article>
+      </main>
+
+      <footer class="footer">
+        <p>&copy; {new Date().getFullYear()} {settings?.prof?.author || settings?.siteTitle}.</p>
+      </footer>
+    </div>
+    <Photo />
+  </body>
+</html>
+
+<style lang="scss">
+  .work-header {
+    text-align: center;
+    margin-bottom: 2rem;
+
+    .title {
+      font-size: 2rem;
+      margin: 0 0 0.5rem;
+    }
+    .date {
+      color: #888;
+      font-size: 0.9rem;
+    }
+  }
+
+  /* 複数枚画像ギャラリー */
+  .image-gallery {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    margin-bottom: 3rem;
+
+    .image-item {
+      width: 100%;
+      text-align: center;
+
+      .detail-img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      }
+    }
+  }
+
+  /* NSFW ワンクッション */
+  .nsfw-wrapper {
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 3rem;
+
+    .nsfw-warning {
+      cursor: pointer;
+      font-weight: bold;
+      color: #c53030;
+      text-align: center;
+      padding: 0.5rem;
+    }
+
+    .image-gallery {
+      margin-top: 1.5rem;
+    }
+  }
+
+  /* メタ情報・タグ */
+  .work-meta {
+    margin-bottom: 2rem;
+
+    .fandom {
+      font-size: 0.95rem;
+      color: #555;
+      margin-bottom: 1rem;
+      .label { font-weight: bold; }
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+
+      .tag-chip {
+        display: inline-block;
+        padding: 0.3rem 0.8rem;
+        background: #f0f0f0;
+        border-radius: 16px;
+        color: #555;
+        text-decoration: none;
+        font-size: 0.85rem;
+        &:hover {
+          background: var(--accent);
+          color: #fff;
+        }
+      }
+    }
+  }
+
+  /* キャプション文章 */
+  .work-content {
+    line-height: 1.8;
+    margin-bottom: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #eee;
+  }
+
+  .back-container {
+    text-align: center;
+    margin-top: 3rem;
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+
+    .btn-back {
+      display: inline-block;
+      padding: 0.6rem 2rem;
+      border: 1px solid #ccc;
+      border-radius: 30px;
+      color: #555;
+      text-decoration: none;
+      transition: all 0.2s;
+      &:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+    }
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 4rem;
+    color: #888;
+    font-size: 0.85rem;
+  }
+</style>
